@@ -1,0 +1,6 @@
+flask
+flask-cors
+pyodbc
+redis
+stripe
+python-dotenv
