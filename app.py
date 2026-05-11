@@ -53,35 +53,5 @@ def get_candidates():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/health')
-def health_check():
-    health_status = {
-        "status": "online",
-        "python_version": os.sys.version,
-        "pyodbc_status": "not_tested",
-        "available_drivers": pyodbc.drivers(),
-        "database_connection": "not_tested"
-    }
-    
-    try:
-        # Intentamos importar pyodbc (la prueba de fuego original)
-        health_status["pyodbc_status"] = "installed"
-        
-        # Intentamos una conexión rápida usando tu variable de entorno
-        # Asegúrate de que en Azure la variable se llame AZURE_SQL_CONNECTIONSTRING
-        conn_str = os.getenv('AZURE_SQL_CONNECTIONSTRING')
-        if conn_str:
-            conn = pyodbc.connect(conn_str, timeout=5)
-            conn.close()
-            health_status["database_connection"] = "success"
-        else:
-            health_status["database_connection"] = "error: connection string missing"
-            
-    except Exception as e:
-        health_status["pyodbc_status"] = "error"
-        health_status["error_message"] = str(e)
-    
-    return jsonify(health_status)
-
 if __name__ == '__main__':
     app.run()
