@@ -43,7 +43,7 @@ async def get_candidates(
     if not include_inactive:
         stmt = stmt.where(Candidate.is_active == True)
 
-    stmt = stmt.order_by(votes_sq.c.vote_count.desc().nullslast())
+    stmt = stmt.order_by(votes_sq.c.vote_count.desc())
 
     result = await db.execute(stmt)
     rows = result.all()
