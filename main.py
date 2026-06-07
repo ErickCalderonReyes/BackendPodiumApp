@@ -29,9 +29,12 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
-    async with engine.begin() as conn:
-        await conn.run_sync(db_models.Base.metadata.create_all)
-    print("🚀 Tablas verificadas — API arriba")
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(db_models.Base.metadata.create_all)
+        print("🚀 Tablas verificadas — API arriba")
+    except Exception as e:
+        print(f"⚠️ DB no disponible al arrancar: {e} — continuando sin tablas")
 
 app.include_router(auth_router.router)
 app.include_router(candidates.router)
