@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, computed_field
 from typing import Optional
 from datetime import datetime
 
@@ -34,6 +34,22 @@ class CandidateOut(CandidateBase):
     model_config = {"from_attributes": True}
 
 
+
+
 class CandidateVoteSummary(CandidateOut):
-    """Para el endpoint público de votación — incluye conteo de votos."""
     vote_count: int = 0
+
+    @computed_field
+    @property
+    def name(self) -> str:
+        return self.full_name
+
+    @computed_field
+    @property
+    def image_url(self) -> Optional[str]:
+        return self.photo_url
+
+    @computed_field
+    @property
+    def total_votes(self) -> int:
+        return self.vote_count
