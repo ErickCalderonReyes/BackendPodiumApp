@@ -36,6 +36,6 @@ async def get_current_user(
 
 
 async def require_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role != "national_admin, admin":
+    if user.role not in ("national_admin", "admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Se requiere rol admin")
     return user
