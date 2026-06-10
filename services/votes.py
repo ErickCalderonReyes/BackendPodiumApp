@@ -11,12 +11,12 @@ from config import settings
 FREE_VOTE_TTL_SECONDS = 7200  # 2 horas
 
 
-def _redis_key(user_id: int, candidate_id: int, season_year: int, tenant_slug: str) -> str:
+def _redis_key(user_id: int, season_year: int, tenant_slug: str) -> str:
     """
-    Clave granular por usuario+candidato+season+tenant.
-    Permite votar por distintos candidatos sin interferencia entre ellos.
+    Clave global por usuario+season+tenant.
+    Solo permite 1 voto gratis cada 2 horas sin importar el candidato.
     """
-    return f"free_vote:{tenant_slug}:{season_year}:{user_id}:{candidate_id}"
+    return f"free_vote:{tenant_slug}:{season_year}:{user_id}"
 
 
 async def cast_free_vote(
@@ -44,7 +44,7 @@ async def cast_free_vote(
         )
 
     # 2. Verificar cooldown en Redis
-    key = _redis_key(user_id, request.candidate_id, request.season_year, tenant_slug)
+    key = _redis_key(user_id, request.season_year, tenant_slug)
     ttl = await redis.ttl(key)
 
     if ttl > 0:
@@ -52,7 +52,7 @@ async def cast_free_vote(
         next_available_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
         return FreeVoteResponse(
             success=False,
-            message="Ya votaste recientemente por este candidato",
+            message="Ya usaste tu voto gratuito. Puedes volver a votar en 2 horas",
             next_available_at=next_available_at,
             seconds_remaining=ttl,
         )
