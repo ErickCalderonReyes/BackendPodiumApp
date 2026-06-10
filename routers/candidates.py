@@ -15,13 +15,14 @@ router = APIRouter(prefix="/candidates", tags=["candidates"])
 @router.get("", response_model=list[CandidateVoteSummary])
 async def list_candidates(
     season_year: int = Query(..., description="Año del certamen, ej: 2026"),
+    tenant_slug: str = Query("mimx", description="Slug del tenant"),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Lista candidatos activos con su conteo de votos, ordenados por votos desc.
     Este endpoint es público — no requiere JWT.
     """
-    return await svc.get_candidates(db, season_year=season_year)
+    return await svc.get_candidates(db, season_year=season_year, tenant_slug=tenant_slug)
 
 
 # ── ADMIN ─────────────────────────────────────────────────────────────────────
