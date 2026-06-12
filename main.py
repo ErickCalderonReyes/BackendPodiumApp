@@ -17,12 +17,13 @@ _origins = [
     "http://localhost:4200",
     f"https://{settings.TENANT_DOMAIN}",
     f"https://www.{settings.TENANT_DOMAIN}",
-    "https://*.podiumapp.com",   # para multi-tenant cuando llegue Semana 3
+    # wildcard removido — no funciona en allow_origins, ver allow_origin_regex abajo
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_origins,
+    allow_origins=_origins,                                 # los explícitos
+    allow_origin_regex=r"https://[a-z0-9-]+\.podiumapp\.com",  # subdominios
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

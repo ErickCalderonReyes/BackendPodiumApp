@@ -11,7 +11,7 @@ from services.auth import get_user_by_email
 bearer_scheme = HTTPBearer()
 
 
-async def get_db():
+async def get_db() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         yield session
 
