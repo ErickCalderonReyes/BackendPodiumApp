@@ -21,7 +21,7 @@ from sqlalchemy import select, func
 from core.dependencies import get_db, get_current_user
 from core.plans import PLAN_LIMITS, within_limit, is_feature_enabled
 from db_models import User, Tenant, Candidate
-
+from schemas.payments import CheckoutRequest
 
 # ── Helper interno ─────────────────────────────────────────────────────────
 
@@ -149,10 +149,34 @@ async def check_sponsors_limit(
         )
 
 
-async def check_paid_votes_enabled(
-    tenant: Tenant = Depends(require_pro),
+async def resolve_paid_votes_tenant(
+    body: "CheckoutRequest",
+    user: User = Depends(get_current_user),
+    db:   AsyncSession = Depends(get_db),
 ) -> Tenant:
-    """Alias semántico de require_pro para endpoints de pagos.
-    Usar en POST /payments/create-session.
+    """Guard para POST /payments/create-session.
+
+    A diferencia de require_pro, el comprador es un VOTER (no el dueño del
+    certamen), así que el tenant NO se resuelve por owner_id sino por el
+    tenant_slug que el votante está votando. Solo exige JWT válido — sin rol.
+
+    Verifica que el certamen exista, esté activo y tenga plan Pro.
     """
+    result = await db.execute(
+        select(Tenant).where(
+            Tenant.slug == body.tenant_slug,
+            Tenant.is_active == True,
+        )
+    )
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Certamen no encontrado o inactivo.",
+        )
+    if tenant.plan == "free":
+        raise _plan_limit_error(
+            "Este certamen no tiene habilitados los votos de pago.",
+            "paid_votes",
+        )
     return tenant

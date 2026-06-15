@@ -16,7 +16,7 @@ Split automático en cada pago:
   - transfer_data.destination = tenant.stripe_account_id → va al director
   - Stripe cobra su fee sobre el total antes del split
 """
-
+import json
 from fastapi import APIRouter, Depends, HTTPException, Request, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -25,11 +25,13 @@ import stripe
 
 from config import settings
 from core.dependencies import get_db, get_current_user
-from core.guards import check_paid_votes_enabled
+from schemas.payments import CheckoutRequest
 from core.plans import commission_amount
 from db_models import VotePackage, Vote, Transaction, Candidate, Tenant, User
 from schemas.payments import CheckoutRequest, CheckoutResponse
 from database import AsyncSessionLocal
+from core.guards import resolve_paid_votes_tenant
+
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 router_payments = APIRouter(prefix="/payments", tags=["payments"])
@@ -45,7 +47,7 @@ async def create_checkout_session(
     body: CheckoutRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    tenant: Tenant = Depends(check_paid_votes_enabled),
+    tenant: Tenant = Depends(resolve_paid_votes_tenant),
 ):
     """
     Crea una Stripe Checkout Session con split automático al director.
@@ -178,9 +180,11 @@ async def stripe_webhook(
     if event["type"] != "checkout.session.completed":
         return {"received": True}
 
-    session_data = event["data"]["object"]
-    # Solo pasa session_data — la función abre su propia sesión de DB
-    background_tasks.add_task(_process_completed_payment, session_data)
+    session_obj = event["data"]["object"]
+    # to_dict_recursive() es el serializador oficial de StripeObject → dict puro.
+    # Evita el KeyError que produce dict() sobre objetos Stripe.
+    session_dict = json.loads(str(session_obj))
+    background_tasks.add_task(_process_completed_payment, session_dict)
 
     return {"received": True}
 
