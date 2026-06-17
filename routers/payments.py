@@ -184,7 +184,12 @@ async def stripe_webhook(
     # to_dict_recursive() es el serializador oficial de StripeObject → dict puro.
     # Evita el KeyError que produce dict() sobre objetos Stripe.
     session_dict = json.loads(str(session_obj))
-    background_tasks.add_task(_process_completed_payment, session_dict)
+    payment_type = session_dict.get("metadata", {}).get("payment_type", "vote")
+    if payment_type == "ticket":
+        from services.tickets import _process_completed_ticket
+        background_tasks.add_task(_process_completed_ticket, session_dict)
+    else:
+        background_tasks.add_task(_process_completed_payment, session_dict)
 
     return {"received": True}
 
