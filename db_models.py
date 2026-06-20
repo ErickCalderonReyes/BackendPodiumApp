@@ -16,6 +16,12 @@ class PlanType(str, enum.Enum):
     pro  = "pro"
 
 
+class DiscountType(str, enum.Enum):
+    percent      = "percent"
+    fixed_amount = "fixed_amount"
+    free         = "free"
+
+
 # ── Tenant ─────────────────────────────────────────────────────────────────
 
 class Tenant(Base):
@@ -48,7 +54,7 @@ class Tenant(Base):
     updated_at              = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
-    owner        = relationship("User", back_populates="tenants")
+    owner         = relationship("User",        back_populates="tenants")
     vote_packages = relationship("VotePackage", back_populates="tenant")
 
 
@@ -65,9 +71,10 @@ class User(Base):
     is_active       = Column(Boolean, default=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
 
-    votes        = relationship("Vote",        back_populates="user")
-    transactions = relationship("Transaction", back_populates="user")
-    tenants      = relationship("Tenant",      back_populates="owner")
+    votes         = relationship("Vote",        back_populates="user")
+    transactions  = relationship("Transaction", back_populates="user")
+    tenants       = relationship("Tenant",      back_populates="owner")
+    ticket_orders = relationship("TicketOrder", back_populates="user")   # ← nuevo
 
 
 # ── Candidate ──────────────────────────────────────────────────────────────
@@ -95,17 +102,17 @@ class Candidate(Base):
 class VotePackage(Base):
     __tablename__ = "vote_packages"
 
-    id           = Column(Integer, primary_key=True, index=True)
+    id              = Column(Integer, primary_key=True, index=True)
     # NULL = plantilla nacional; FK = paquete propio del director
-    tenant_id    = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
-    name         = Column(String(100), nullable=False)
+    tenant_id       = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    name            = Column(String(100), nullable=False)
     # Precio en centavos (sin floats en DB) — MXN
-    price_cents  = Column(Integer, nullable=False)
-    vote_count   = Column(Integer, nullable=False)
+    price_cents     = Column(Integer, nullable=False)
+    vote_count      = Column(Integer, nullable=False)
     # ID del Price en Stripe (se crea/recrea al cambiar el precio)
     stripe_price_id = Column(String(255), nullable=True)
-    is_active    = Column(Boolean, default=True)
-    sort_order   = Column(Integer, default=0)
+    is_active       = Column(Boolean, default=True)
+    sort_order      = Column(Integer, default=0)
 
     tenant       = relationship("Tenant",      back_populates="vote_packages")
     transactions = relationship("Transaction", back_populates="package")
@@ -155,3 +162,120 @@ class Transaction(Base):
 
     user    = relationship("User",        back_populates="transactions")
     package = relationship("VotePackage", back_populates="transactions")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TICKETS — Sistema de venta de boletos · lanzamiento 15 julio 2026
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Event ──────────────────────────────────────────────────────────────────
+# MIMX: un solo evento "MIM 2026" cubre Preliminar + Gran Final.
+# El boleto da acceso a ambas noches — se aclara en el frontend con copy.
+# is_active es el "switch" manual para cerrar ventas sin tocar otra cosa.
+
+class Event(Base):
+    __tablename__ = "events"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    tenant_slug = Column(String(50),  nullable=False, index=True)
+    name        = Column(String(255), nullable=False)
+    # Nullable: fecha puede no estar definida al crear el evento
+    event_date  = Column(DateTime(timezone=True), nullable=True)
+    season_year = Column(Integer, nullable=False, index=True)
+    # Switch manual: apagar = nadie más puede comprar boletos
+    is_active   = Column(Boolean, nullable=False, default=True)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+
+    zones = relationship("TicketZone", back_populates="event")
+
+
+# ── TicketZone ─────────────────────────────────────────────────────────────
+
+class TicketZone(Base):
+    __tablename__ = "ticket_zones"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    event_id    = Column(Integer, ForeignKey("events.id"), nullable=False, index=True)
+    name        = Column(String(100), nullable=False)    # "Zona Plata" · "Zona Oro"
+    price_cents = Column(Integer, nullable=False)        # precio base en centavos MXN
+    # NULL = sin límite de inventario · MIMX: Plata=175, Oro=75
+    capacity    = Column(Integer, nullable=True)
+    sort_order  = Column(Integer, nullable=False, default=0)
+    is_active   = Column(Boolean, nullable=False, default=True)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+
+    event          = relationship("Event",        back_populates="zones")
+    discount_codes = relationship("DiscountCode", back_populates="zone")
+    orders         = relationship("TicketOrder",  back_populates="zone")
+
+
+# ── DiscountCode ───────────────────────────────────────────────────────────
+# Diseño generalizado: sirve para cualquier certamen futuro sin tocar código.
+#
+# Casos MIMX configurados como datos:
+#   hotel 2+ noches → PLATA-{uid}: free,         applies_to_zone=Plata, max_uses=1
+#   hotel 2+ noches → ORO-{uid}:   fixed $250,   applies_to_zone=Oro,   max_uses=1
+#   director estatal→ DIR-{uid}:    free,         applies_to_zone=Oro,   max_uses=1
+#
+# Exclusividad mutua tarjeta hotel: el webhook desactiva el código hermano
+# (mismo {uid}) al confirmar el pago del primero que se use.
+
+class DiscountCode(Base):
+    __tablename__ = "discount_codes"
+
+    id                 = Column(Integer, primary_key=True, index=True)
+    tenant_slug        = Column(String(50), nullable=False, index=True)
+    # Código que escribe el usuario: "PLATA-A3K9", "DIR-SONORA-7F2B", etc.
+    code               = Column(String(50), nullable=False)
+    # percent | fixed_amount | free
+    discount_type      = Column(SAEnum(DiscountType), nullable=False)
+    # centavos para fixed_amount · 0-100 para percent · NULL para free
+    discount_value     = Column(Integer, nullable=True)
+    # NULL = aplica a cualquier zona del tenant
+    applies_to_zone_id = Column(Integer, ForeignKey("ticket_zones.id"), nullable=True)
+    # NULL = ilimitado · 1 = código individual (tarjeta de bienvenida, director estatal)
+    max_uses           = Column(Integer, nullable=True)
+    current_uses       = Column(Integer, nullable=False, default=0)
+    valid_until        = Column(DateTime(timezone=True), nullable=True)
+    is_active          = Column(Boolean, nullable=False, default=True)
+    created_at         = Column(DateTime(timezone=True), server_default=func.now())
+
+    zone   = relationship("TicketZone", back_populates="discount_codes")
+    orders = relationship("TicketOrder", back_populates="discount_code")
+
+    __table_args__ = (
+        # Unique compuesto: dos tenants distintos pueden tener el mismo código sin conflicto
+        Index("ix_discount_codes_tenant_code", "tenant_slug", "code", unique=True),
+    )
+
+
+# ── TicketOrder ────────────────────────────────────────────────────────────
+
+class TicketOrder(Base):
+    __tablename__ = "ticket_orders"
+
+    id                       = Column(Integer, primary_key=True, index=True)
+    # user_id nullable: invitados y comps del hotel no tienen cuenta
+    user_id                  = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    zone_id                  = Column(Integer, ForeignKey("ticket_zones.id"), nullable=False, index=True)
+    tenant_slug              = Column(String(50), nullable=False, index=True)
+    quantity                 = Column(Integer, nullable=False, default=1)
+    amount_cents             = Column(Integer, nullable=False)
+    discount_code_id         = Column(Integer, ForeignKey("discount_codes.id"), nullable=True)
+    stripe_payment_intent_id = Column(String(255), unique=True, nullable=False)
+    season_year              = Column(Integer, nullable=False, index=True)
+    status                   = Column(String(50), nullable=False, default="pending")
+    folio                    = Column(String(20), nullable=True, index=True)
+    # Asistente sin cuenta (invitado o huésped)
+    guest_name               = Column(String(255), nullable=True)
+    guest_email              = Column(String(255), nullable=True)
+    guest_phone              = Column(String(50),  nullable=True)
+    # Canal: public | hotel | director
+    source                   = Column(String(20), nullable=False, default="public")
+    # Referencia de grupo (número de habitación) para sentar juntos en el lote
+    group_ref                = Column(String(100), nullable=True)
+    created_at               = Column(DateTime(timezone=True), server_default=func.now())
+
+    user          = relationship("User",         back_populates="ticket_orders")
+    zone          = relationship("TicketZone",   back_populates="orders")
+    discount_code = relationship("DiscountCode", back_populates="orders")
