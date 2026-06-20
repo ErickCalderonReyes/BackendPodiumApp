@@ -27,6 +27,8 @@ from services.tickets import (
     validate_discount_code,
     create_ticket_checkout,
 )
+from schemas.tickets import PublicTicketCheckoutRequest
+from services.tickets import create_public_ticket_checkout
 
 router_tickets = APIRouter(prefix="/tickets", tags=["tickets"])
 
@@ -141,3 +143,22 @@ async def create_session(
 #   app.include_router(router_tickets)
 #
 # ════════════════════════════════════════════════════════════════════════════
+@router_tickets.post("/checkout", response_model=TicketCheckoutResponse)
+async def public_checkout(
+    body: PublicTicketCheckoutRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Checkout público de boletos como invitado (sin cuenta).
+    Devuelve checkout_url de Stripe. El webhook confirma la orden y manda correo.
+    """
+    result = await create_public_ticket_checkout(
+        zone_id     = body.zone_id,
+        quantity    = body.quantity,
+        tenant_slug = body.tenant_slug,
+        guest_name  = body.guest_name,
+        guest_email = body.guest_email,
+        guest_phone = body.guest_phone,
+        db          = db,
+    )
+    return TicketCheckoutResponse(**result)

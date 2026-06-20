@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     TENANT_NAME: str = "Mister International México"
     TENANT_DOMAIN: str = "misterinternational.mx"
 
+    # RESEND
+    RESEND_API_KEY: str = ""
+    EMAIL_FROM: str = "Mister International México <onboarding@resend.dev>"
+
     # ════════════════════════════════════════════════════════
     # CONFIGURACIÓN CORRECTA PARA PYDANTIC V2
     # ════════════════════════════════════════════════════════
@@ -32,6 +36,4 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore"  # Evita que truene si hay variables de más en tu .env que no usas aquí
     )
-
-
 settings = Settings()

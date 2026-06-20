@@ -65,3 +65,12 @@ class TicketCheckoutResponse(BaseModel):
     amount_cents: int
     is_free:      bool = False
     zone_name:    str
+    folio: Optional[str] = None
+
+class PublicTicketCheckoutRequest(BaseModel):
+    tenant_slug:  str
+    zone_id:      int
+    quantity:     int = 1
+    guest_name:   str
+    guest_email:  str
+    guest_phone:  Optional[str] = None

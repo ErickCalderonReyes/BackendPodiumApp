@@ -4,4 +4,10 @@ __pycache__/
 *.pyc
 .idea/
 *.db
-alembic/versions/
+
+# Datos generados y pruebas
+codigos_*.csv
+codigos_*_INSERT.sql
+tarjetas_hotel.csv
+hotel_prueba.csv
+test_email.py
