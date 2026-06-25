@@ -27,10 +27,10 @@ from config import settings
 from core.dependencies import get_db, get_current_user
 from schemas.payments import CheckoutRequest
 from core.plans import commission_amount
-from db_models import VotePackage, Vote, Transaction, Candidate, Tenant, User
 from schemas.payments import CheckoutRequest, CheckoutResponse
 from database import AsyncSessionLocal
 from core.guards import resolve_paid_votes_tenant
+from db_models import VotePackage, Vote, Transaction, Candidate, Tenant, User, VoteComment
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -137,6 +137,7 @@ async def create_checkout_session(
                 "tenant_slug":  tenant.slug,
                 "season_year":  str(tenant.season_year),
                 "vote_count":   str(pkg.vote_count),
+                "comment":      body.comment or "",
             },
             success_url=f"{settings.FRONTEND_URL}/pago/exito?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{settings.FRONTEND_URL}/pago/cancelado",
@@ -256,3 +257,19 @@ async def _process_completed_payment(session_data: dict) -> None:
             await db.commit()
         except Exception:
             await db.rollback()
+            return
+
+        # Guardar comentario si existe
+        comment_text = meta.get("comment", "").strip()
+        if comment_text and transaction.id:
+            vote_comment = VoteComment(
+                transaction_id=transaction.id,
+                candidate_id=candidate_id,
+                user_id=user_id,
+                comment_text=comment_text,
+                tenant_slug=tenant_slug,
+                season_year=season_year,
+            )
+            async with AsyncSessionLocal() as db2:
+                db2.add(vote_comment)
+                await db2.commit()

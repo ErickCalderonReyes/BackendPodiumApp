@@ -162,6 +162,7 @@ class Transaction(Base):
 
     user    = relationship("User",        back_populates="transactions")
     package = relationship("VotePackage", back_populates="transactions")
+    comment = relationship("VoteComment", back_populates="transaction", uselist=False)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -279,3 +280,21 @@ class TicketOrder(Base):
     user          = relationship("User",         back_populates="ticket_orders")
     zone          = relationship("TicketZone",   back_populates="orders")
     discount_code = relationship("DiscountCode", back_populates="orders")
+
+
+# ── VoteComment ──────────────────────────────────────────────────────────────
+class VoteComment(Base):
+    __tablename__ = "vote_comments"
+
+    id             = Column(Integer, primary_key=True, index=True)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=False, index=True)
+    candidate_id   = Column(Integer, ForeignKey("candidates.id"),   nullable=False, index=True)
+    user_id        = Column(Integer, ForeignKey("users.id"),        nullable=False, index=True)
+    comment_text   = Column(Text, nullable=False)
+    tenant_slug    = Column(String(50), nullable=False, index=True)
+    season_year    = Column(Integer,    nullable=False, index=True)
+    created_at     = Column(DateTime(timezone=True), server_default=func.now())
+
+    transaction = relationship("Transaction", back_populates="comment")
+    candidate   = relationship("Candidate")
+    user        = relationship("User")
