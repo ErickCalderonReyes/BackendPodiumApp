@@ -139,7 +139,7 @@ async def create_checkout_session(
                 "vote_count":   str(pkg.vote_count),
                 "comment":      body.comment or "",
             },
-            success_url=f"{settings.FRONTEND_URL}/pago/exito?session_id={{CHECKOUT_SESSION_ID}}",
+            success_url=f"{settings.FRONTEND_URL}/#voting",
             cancel_url=f"{settings.FRONTEND_URL}/pago/cancelado",
             currency="mxn",
         )
