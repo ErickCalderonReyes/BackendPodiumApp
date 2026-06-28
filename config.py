@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     # Pasarela de pagos y Frontend (Día 7)
     STRIPE_SECRET_KEY: str
     STRIPE_WEBHOOK_SECRET:str
-    FRONTEND_URL: str = "http://localhost:4200"
+    FRONTEND_URL: str = "https://www.misterinternational.mx"
 
     # JWT
     JWT_SECRET: str
